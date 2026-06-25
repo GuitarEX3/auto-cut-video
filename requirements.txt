@@ -1,0 +1,7 @@
+flask
+moviepy
+edge-tts
+gtts
+anthropic
+requests
+gunicorn
