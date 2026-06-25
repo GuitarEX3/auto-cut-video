@@ -7,6 +7,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: RENDER_DISK_PATH
+        value: /data
     disk:
       name: data
       mountPath: /data
