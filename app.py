@@ -9,8 +9,9 @@ from flask import Flask, request, jsonify, send_file, send_from_directory
 
 app = Flask(__name__, static_folder="static")
 
-# ใช้ /data บน Render (persistent disk) หรือ local ถ้ารันเครื่องตัวเอง
-_BASE = Path(os.environ.get("RENDER_DISK_PATH", "."))
+# ใช้ /data บน Render ถ้า mount แล้ว ไม่งั้น fallback เป็น local
+_data = Path("/data")
+_BASE = _data if _data.exists() and os.access(_data, os.W_OK) else Path(".")
 UPLOAD_DIR = _BASE / "uploads"
 OUTPUT_DIR = _BASE / "outputs"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
