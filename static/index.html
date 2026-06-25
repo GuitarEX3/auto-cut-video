@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0e0e10;
+    --surface:  #17171a;
+    --raised:   #1f1f23;
+    --border:   #2a2a30;
+    --border2:  #3a3a42;
+    --accent:   #e8ff47;
+    --accent2:  #b8cc2e;
+    --text:     #f0f0f2;
+    --muted:    #7a7a88;
+    --danger:   #ff5555;
+    --success:  #47ff9a;
+    --font:     'IBM Plex Sans Thai', sans-serif;
+    --mono:     'IBM Plex Mono', monospace;
+    --radius:   10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 28px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: grid; place-items: center;
+  }
+  .logo-mark svg { width: 20px; height: 20px; }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  header span { font-size: 13px; color: var(--muted); margin-left: 6px; font-weight: 300; }
+
+  /* ── Layout ── */
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 36px 40px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .full { grid-column: 1 / -1; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+  }
+  .card-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: block;
+  }
+
+  /* ── Drop zone ── */
+  #drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: 8px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(232,255,71,.04);
+  }
+  #drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  #drop-zone .icon {
+    width: 44px; height: 44px;
+    background: var(--raised);
+    border-radius: 10px;
+    display: grid; place-items: center;
+    margin: 0 auto 12px;
+  }
+  #drop-zone .icon svg { width: 22px; height: 22px; stroke: var(--muted); }
+  #drop-zone p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+  #drop-zone strong { color: var(--accent); font-weight: 500; }
+  #file-name {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--success);
+    display: none;
+  }
+
+  /* ── Textarea ── */
+  textarea {
+    width: 100%;
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    resize: vertical;
+    min-height: 180px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  textarea::placeholder { color: var(--muted); }
+  textarea:focus { border-color: var(--accent); }
+
+  /* ── Options row ── */
+  .options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .toggle-card {
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    user-select: none;
+  }
+  .toggle-card:hover { border-color: var(--border2); }
+  .toggle-card.active {
+    border-color: var(--accent);
+    background: rgba(232,255,71,.06);
+  }
+  .toggle-card input { display: none; }
+  .toggle-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .toggle-name { font-size: 13px; font-weight: 500; }
+  .pip {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--border2);
+    border-radius: 50%;
+    transition: background .2s, border-color .2s;
+  }
+  .toggle-card.active .pip {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .toggle-desc { font-size: 12px; color: var(--muted); }
+
+  /* ── Lang select ── */
+  .lang-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .lang-row label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  select {
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 6px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* ── API key ── */
+  .api-row { display: flex; gap: 10px; margin-top: 6px; }
+  input[type="text"], input[type="password"] {
+    flex: 1;
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  /* ── Render button ── */
+  #render-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0e0e10;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 15px;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+    letter-spacing: 0.02em;
+  }
+  #render-btn:hover:not(:disabled) { background: #d4eb30; }
+  #render-btn:active:not(:disabled) { transform: scale(0.99); }
+  #render-btn:disabled { background: var(--border2); color: var(--muted); cursor: default; }
+
+  /* ── Progress ── */
+  #progress-section { display: none; }
+  .progress-bar-wrap {
+    background: var(--raised);
+    border-radius: 100px;
+    height: 6px;
+    overflow: hidden;
+    margin: 12px 0 8px;
+  }
+  #progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 100px;
+    width: 0%;
+    transition: width .4s ease;
+  }
+  #progress-msg {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  /* ── Download ── */
+  #download-section { display: none; }
+  #download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    background: transparent;
+    border: 1.5px solid var(--success);
+    border-radius: 8px;
+    color: var(--success);
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 14px;
+    cursor: pointer;
+    transition: background .15s;
+    text-decoration: none;
+  }
+  #download-btn:hover { background: rgba(71,255,154,.08); }
+
+  /* ── Error ── */
+  #error-box {
+    display: none;
+    background: rgba(255,85,85,.08);
+    border: 1px solid rgba(255,85,85,.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--danger);
+    font-family: var(--mono);
+    word-break: break-all;
+  }
+
+  /* ── Scenes preview ── */
+  #scenes-section { display: none; }
+  .scene-list { display: flex; flex-direction: column; gap: 6px; }
+  .scene-item {
+    background: var(--raised);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 13px;
+  }
+  .scene-num {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 11px;
+    min-width: 28px;
+    padding-top: 2px;
+  }
+  .scene-text { color: var(--text); line-height: 1.5; flex: 1; }
+  .scene-time { font-family: var(--mono); color: var(--muted); font-size: 11px; white-space: nowrap; padding-top: 2px; }
+
+
+  /* ── Video preview ── */
+  .video-preview-wrap {
+    display: none;
+    margin-top: 14px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    position: relative;
+  }
+  .video-preview-wrap video {
+    width: 100%;
+    max-height: 220px;
+    display: block;
+    object-fit: contain;
+  }
+  .preview-label {
+    position: absolute;
+    top: 8px; left: 8px;
+    background: rgba(0,0,0,.6);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .05em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; padding: 20px 16px 0; }
+    .options-grid { grid-template-columns: 1fr; }
+    header { padding: 20px 16px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="5,3 19,12 5,21" fill="#0e0e10"/>
+    </svg>
+  </div>
+  <div>
+    <h1>Video Editor<span>— Auto cut + พากย์เสียง</span></h1>
+  </div>
+</header>
+
+<main>
+
+  <!-- Video upload -->
+  <div class="card">
+    <div class="card-label">วิดีโอ</div>
+    <div id="drop-zone">
+      <input type="file" id="video-input" accept="video/*">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="3" width="20" height="16" rx="2"/>
+          <path d="M10 8l6 4-6 4V8z" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <p>ลากไฟล์วิดีโอมาวางที่นี่<br>หรือ <strong>คลิกเพื่อเลือกไฟล์</strong></p>
+      <div id="file-name"></div>
+    </div>
+    <div class="video-preview-wrap" id="input-preview-wrap">
+      <span class="preview-label">INPUT</span>
+      <video id="input-preview" controls muted></video>
+    </div>
+  </div>
+
+  <!-- Script textarea -->
+  <div class="card">
+    <div class="card-label">สคริป</div>
+    <textarea id="script-input" placeholder="พิมพ์สคริปที่นี่ เขียนเป็นข้อความธรรมดา AI จะแบ่ง scene ให้อัตโนมัติ&#10;&#10;ตัวอย่าง:&#10;ยินดีต้อนรับสู่วิดีโอของเรา วันนี้เรามาพูดถึงเรื่องที่น่าสนใจ..."></textarea>
+  </div>
+
+  <!-- Options -->
+  <div class="card full">
+    <div class="card-label">ตัวเลือก</div>
+    <div class="options-grid">
+      <label class="toggle-card" id="tts-card">
+        <input type="checkbox" id="tts-check">
+        <div class="toggle-top">
+          <span class="toggle-name">🔊 เสียงพากย์</span>
+          <div class="pip"></div>
+        </div>
+        <div class="toggle-desc">Edge TTS อ่านสคริปให้</div>
+      </label>
+      <label class="toggle-card" id="sub-card">
+        <input type="checkbox" id="sub-check">
+        <div class="toggle-top">
+          <span class="toggle-name">💬 Subtitle</span>
+          <div class="pip"></div>
+        </div>
+        <div class="toggle-desc">burn-in ข้อความลงคลิป</div>
+      </label>
+      <div style="display:flex;flex-direction:column;justify-content:center;">
+        <div class="lang-row">
+          <label>เสียง</label>
+          <select id="voice-select">
+            <option value="th-TH-PremwadeeNeural">👩 เปรมวดี (หญิง · ทางการ)</option>
+            <option value="th-TH-NiwatNeural">👨 นิวัฒน์ (ชาย · ทางการ)</option>
+            <option value="th-TH-AcharaNeural">👩 อาชรา (หญิง · เป็นกันเอง)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="card-label" style="margin-bottom:8px;">Anthropic API Key <span style="color:var(--muted);font-style:italic;text-transform:none;letter-spacing:0;">(ไม่บังคับ — ช่วยให้ AI แบ่ง scene ได้ฉลาดขึ้น)</span></div>
+      <div class="api-row">
+        <input type="password" id="api-key" placeholder="sk-ant-...">
+      </div>
+    </div>
+  </div>
+
+  <!-- Render button -->
+  <div class="card full">
+    <button id="render-btn">▶ เริ่ม Render วิดีโอ</button>
+
+    <div id="progress-section" style="margin-top:18px;">
+      <div class="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <div id="progress-msg">กำลังเริ่มต้น...</div>
+    </div>
+
+    <div id="error-box" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- Download -->
+  <div class="card full" id="download-section">
+    <div class="card-label">เสร็จแล้ว</div>
+    <div class="video-preview-wrap" id="output-preview-wrap" style="display:block; margin-top:0; margin-bottom:14px;">
+      <span class="preview-label">OUTPUT</span>
+      <video id="output-preview" controls style="max-height:260px;"></video>
+    </div>
+    <a id="download-btn" href="#" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M12 15l-4-4M12 15l4-4"/><path d="M2 17v2a2 2 0 002 2h16a2 2 0 002-2v-2"/></svg>
+      ดาวน์โหลด output.mp4
+    </a>
+  </div>
+
+  <!-- Scene preview -->
+  <div class="card full" id="scenes-section">
+    <div class="card-label">scene ที่ AI แบ่งให้</div>
+    <div class="scene-list" id="scene-list"></div>
+  </div>
+
+</main>
+
+<script>
+// ── Toggle cards ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.toggle-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const cb = card.querySelector('input[type=checkbox]');
+    cb.checked = !cb.checked;
+    card.classList.toggle('active', cb.checked);
+  });
+});
+
+// ── Drop zone ────────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('video-input');
+const fileName  = document.getElementById('file-name');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) showFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) showFile(fileInput.files[0]); });
+
+function showFile(f) {
+  fileInput._file = f;
+  fileName.style.display = 'block';
+  fileName.textContent = '✓ ' + f.name + '  (' + (f.size/1024/1024).toFixed(1) + ' MB)';
+
+  // แสดง preview วิดีโอที่เลือก
+  const wrap = document.getElementById('input-preview-wrap');
+  const vid  = document.getElementById('input-preview');
+  const url  = URL.createObjectURL(f);
+  vid.src = url;
+  wrap.style.display = 'block';
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+let pollInterval;
+
+document.getElementById('render-btn').addEventListener('click', async () => {
+  const file   = fileInput._file || fileInput.files[0];
+  const script = document.getElementById('script-input').value.trim();
+
+  if (!file) return alert('กรุณาเลือกไฟล์วิดีโอก่อนครับ');
+  if (!script) return alert('กรุณาใส่สคริปก่อนครับ');
+
+  // Reset UI
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('download-section').style.display = 'none';
+  document.getElementById('scenes-section').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+  document.getElementById('render-btn').disabled = true;
+  document.getElementById('render-btn').textContent = '⏳ กำลัง render...';
+  setProgress(2, 'กำลังอัปโหลดไฟล์...');
+
+  const fd = new FormData();
+  fd.append('video', file);
+  fd.append('script', script);
+  fd.append('tts',       document.getElementById('tts-check').checked);
+  fd.append('subtitles', document.getElementById('sub-check').checked);
+  fd.append('voice',     document.getElementById('voice-select').value);
+  fd.append('api_key',   document.getElementById('api-key').value.trim());
+
+  try {
+    const res = await fetch('/render', { method: 'POST', body: fd });
+    const { job_id, error } = await res.json();
+    if (error) return showError(error);
+
+    pollInterval = setInterval(() => pollStatus(job_id), 1200);
+  } catch(e) {
+    showError('ไม่สามารถเชื่อมต่อ server ได้: ' + e.message);
+  }
+});
+
+function setProgress(pct, msg) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-msg').textContent = msg;
+}
+
+async function pollStatus(jobId) {
+  try {
+    const r = await fetch('/status/' + jobId);
+    const data = await r.json();
+
+    setProgress(data.progress || 0, data.message || '...');
+
+    if (data.status === 'done') {
+      clearInterval(pollInterval);
+      showDone(data.output);
+    } else if (data.status === 'error') {
+      clearInterval(pollInterval);
+      showError(data.message);
+    }
+  } catch(e) {
+    clearInterval(pollInterval);
+    showError('Connection lost: ' + e.message);
+  }
+}
+
+function showDone(filename) {
+  setProgress(100, 'เสร็จแล้ว! 🎉');
+  const btn = document.getElementById('download-btn');
+  btn.href = '/download/' + filename;
+
+  // โหลด output video preview
+  const outVid = document.getElementById('output-preview');
+  outVid.src = '/download/' + filename;
+  outVid.load();
+
+  document.getElementById('download-section').style.display = 'block';
+  resetBtn();
+}
+
+function showError(msg) {
+  const box = document.getElementById('error-box');
+  box.textContent = '❌ ' + msg;
+  box.style.display = 'block';
+  document.getElementById('progress-section').style.display = 'none';
+  resetBtn();
+}
+
+function resetBtn() {
+  const btn = document.getElementById('render-btn');
+  btn.disabled = false;
+  btn.textContent = '▶ เริ่ม Render วิดีโอ';
+}
+</script>
+</body>
+</html>
