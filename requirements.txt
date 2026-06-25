@@ -1,5 +1,5 @@
 flask
-moviepy
+moviepy==1.0.3
 edge-tts
 gtts
 anthropic
