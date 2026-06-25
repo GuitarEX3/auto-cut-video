@@ -5,3 +5,4 @@ gtts
 anthropic
 requests
 gunicorn
+gevent
