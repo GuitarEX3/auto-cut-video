@@ -9,7 +9,20 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="static")
 
-_BASE = Path(os.environ.get("RENDER_DISK_PATH", "."))
+# ── Storage: ใช้ /data บน Render (persistent disk), /tmp เป็น fallback ──────
+def _resolve_base() -> Path:
+    disk = os.environ.get("RENDER_DISK_PATH", "")
+    if disk:
+        p = Path(disk)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except (PermissionError, OSError) as e:
+            print(f"WARNING: cannot use {disk} ({e}), falling back to /tmp")
+            return Path("/tmp")
+    return Path(".")
+
+_BASE = _resolve_base()
 UPLOAD_DIR = _BASE / "uploads"
 OUTPUT_DIR = _BASE / "outputs"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,17 +95,15 @@ Return ONLY valid JSON array:
 
 
 def make_sub_clip(text, clip_w, clip_duration):
-    """สร้าง subtitle TextClip — คืน None ถ้าทำไม่ได้"""
     try:
-        from moviepy.editor import TextClip, CompositeVideoClip
+        from moviepy.editor import TextClip
         wrapped = "\n".join(textwrap.wrap(text, 38))
-        txt = (TextClip(wrapped, fontsize=26, color="white",
-                        stroke_color="black", stroke_width=1.5,
-                        method="caption", size=(clip_w - 40, None))
-               .set_position(("center", "bottom"))
-               .set_duration(clip_duration)
-               .margin(bottom=18, opacity=0))
-        return txt
+        return (TextClip(wrapped, fontsize=26, color="white",
+                         stroke_color="black", stroke_width=1.5,
+                         method="caption", size=(clip_w - 40, None))
+                .set_position(("center", "bottom"))
+                .set_duration(clip_duration)
+                .margin(bottom=18, opacity=0))
     except Exception as e:
         print(f"Subtitle error: {e}")
         return None
@@ -105,7 +116,6 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
         if output:
             jobs[job_id]["output"] = output
 
-    # เก็บ resource ทั้งหมดไว้ close ตอนท้าย
     open_clips = []
     tts_paths  = []
 
@@ -120,16 +130,15 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
         open_clips.append(src)
         duration = src.duration
 
-        # ถ้าใช้ audio mode และไม่มี script ให้สร้าง dummy scenes
         if audio_path and not script_text.strip():
-            script_text = "."          # fallback เพื่อไม่ให้ split พัง
+            script_text = "."
 
         update("running", 15, "AI กำลังแบ่ง scene...")
         scenes = split_script_ai(script_text, duration, api_key)
         if not scenes:
             raise ValueError("ไม่สามารถแบ่ง scene ได้ กรุณาตรวจสอบสคริป")
 
-        # ── สร้าง / ตัด audio ต่อ scene ──────────────────────────────────────
+        # ── สร้าง / ตัดเสียงต่อ scene ────────────────────────────────────────
         if audio_path:
             update("running", 30, f"กำลังตัดเสียงจากไฟล์ตาม {len(scenes)} scene...")
             src_audio = AudioFileClip(audio_path)
@@ -139,8 +148,7 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
                 s = min(sc["start"], src_audio.duration - 0.01)
                 e = min(sc["end"],   src_audio.duration)
                 if e > s:
-                    seg = src_audio.subclip(s, e)
-                    seg.write_audiofile(p, logger=None)
+                    src_audio.subclip(s, e).write_audiofile(p, logger=None)
                     tts_paths.append(p)
                 else:
                     tts_paths.append(None)
@@ -162,10 +170,8 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
             e = min(sc["end"],   src.duration)
             if e <= s:
                 continue
-
             clip = src.subclip(s, e)
 
-            # ใส่เสียง
             if i < len(tts_paths) and tts_paths[i]:
                 try:
                     aud = AudioFileClip(tts_paths[i])
@@ -176,7 +182,6 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
                 except Exception as e:
                     print(f"Audio attach error scene {i+1}: {e}")
 
-            # ใส่ subtitle
             if use_subs:
                 sub = make_sub_clip(sc["text"], clip.w, clip.duration)
                 if sub:
@@ -191,7 +196,7 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
         final = concatenate_videoclips(clips, method="compose")
         out_path = str(OUTPUT_DIR / f"{job_id}.mp4")
         final.write_videofile(out_path, codec="libx264", audio_codec="aac",
-                              temp_audiofile=f"tmp_{job_id}.m4a",
+                              temp_audiofile=str(OUTPUT_DIR / f"tmp_{job_id}.m4a"),
                               remove_temp=True, logger=None)
 
         update("done", 100, "เสร็จแล้ว! คลิกดาวน์โหลดได้เลย", output=f"{job_id}.mp4")
@@ -200,19 +205,13 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
         update("error", 0, f"เกิดข้อผิดพลาด: {str(ex)}")
 
     finally:
-        # close ทุก resource
         for c in open_clips:
-            try:
-                c.close()
-            except Exception:
-                pass
-        # ลบ tts temp files
+            try: c.close()
+            except: pass
         for p in tts_paths:
             if p:
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
+                try: os.remove(p)
+                except: pass
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -257,10 +256,9 @@ def render():
         audio_file.save(audio_path)
 
     jobs[job_id] = {"status": "queued", "progress": 0, "message": "รอดำเนินการ...", "output": None}
-    t = threading.Thread(target=build_job, args=(
+    threading.Thread(target=build_job, args=(
         job_id, vid_path, script_text, use_tts, use_subs, tts_voice, api_key, audio_path
-    ), daemon=True)
-    t.start()
+    ), daemon=True).start()
     return jsonify({"job_id": job_id})
 
 @app.route("/status/<job_id>")
