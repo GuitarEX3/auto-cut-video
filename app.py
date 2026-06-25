@@ -9,22 +9,9 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="static")
 
-# ── Storage: ใช้ /data บน Render (persistent disk), /tmp เป็น fallback ──────
-def _resolve_base() -> Path:
-    disk = os.environ.get("RENDER_DISK_PATH", "")
-    if disk:
-        p = Path(disk)
-        try:
-            p.mkdir(parents=True, exist_ok=True)
-            return p
-        except (PermissionError, OSError) as e:
-            print(f"WARNING: cannot use {disk} ({e}), falling back to /tmp")
-            return Path("/tmp")
-    return Path(".")
-
-_BASE = _resolve_base()
-UPLOAD_DIR = _BASE / "uploads"
-OUTPUT_DIR = _BASE / "outputs"
+# Free tier: ใช้ /tmp เสมอ (ไม่ต้องการ persistent disk)
+UPLOAD_DIR = Path("/tmp/uploads")
+OUTPUT_DIR = Path("/tmp/outputs")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,7 +30,6 @@ async def _edge_tts_async(text: str, voice: str, out_path: str):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(out_path)
 
-
 def tts_edge(text: str, voice: str, out_path: str) -> bool:
     try:
         asyncio.run(_edge_tts_async(text, voice, out_path))
@@ -51,7 +37,6 @@ def tts_edge(text: str, voice: str, out_path: str) -> bool:
     except Exception as e:
         print(f"Edge TTS error: {e}")
         return False
-
 
 def tts_gtts(text: str, out_path: str):
     from gtts import gTTS
@@ -87,7 +72,7 @@ Return ONLY valid JSON array:
     scenes, cur = [], 0.0
     for i, s in enumerate(sents):
         dur = duration * len(s) / total
-        scenes.append({"scene": i + 1, "start": round(cur, 2), "end": round(cur + dur, 2), "text": s})
+        scenes.append({"scene": i+1, "start": round(cur,2), "end": round(cur+dur,2), "text": s})
         cur += dur
     if scenes:
         scenes[-1]["end"] = round(duration, 2)
@@ -138,7 +123,7 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
         if not scenes:
             raise ValueError("ไม่สามารถแบ่ง scene ได้ กรุณาตรวจสอบสคริป")
 
-        # ── สร้าง / ตัดเสียงต่อ scene ────────────────────────────────────────
+        # ── เสียง ─────────────────────────────────────────────────────────────
         if audio_path:
             update("running", 30, f"กำลังตัดเสียงจากไฟล์ตาม {len(scenes)} scene...")
             src_audio = AudioFileClip(audio_path)
@@ -162,7 +147,7 @@ def build_job(job_id, video_path, script_text, use_tts, use_subs, tts_voice, api
                     tts_gtts(sc["text"], p)
                 tts_paths.append(p)
 
-        # ── ตัดต่อวิดีโอ ──────────────────────────────────────────────────────
+        # ── ตัดต่อ ────────────────────────────────────────────────────────────
         update("running", 55, "กำลังตัดต่อวิดีโอ...")
         clips = []
         for i, sc in enumerate(scenes):
