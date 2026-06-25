@@ -649,6 +649,8 @@ function showAudioFile(f) {
 
 // ── Render ───────────────────────────────────────────────────────────────────
 let pollInterval;
+let pollErrors = 0;
+const MAX_POLL_ERRORS = 5;
 
 document.getElementById('render-btn').addEventListener('click', async () => {
   const file = fileInput._file || fileInput.files[0];
@@ -680,6 +682,7 @@ document.getElementById('render-btn').addEventListener('click', async () => {
   document.getElementById('download-section').style.display = 'none';
   document.getElementById('scenes-section').style.display = 'none';
   document.getElementById('error-box').style.display = 'none';
+  pollErrors = 0;
   document.getElementById('render-btn').disabled = true;
   document.getElementById('render-btn').textContent = '⏳ กำลัง render...';
   setProgress(2, 'กำลังอัปโหลดไฟล์...');
@@ -702,8 +705,12 @@ function setProgress(pct, msg) {
 async function pollStatus(jobId) {
   try {
     const r = await fetch('/status/' + jobId);
-    const data = await r.json();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    if (!text || !text.trim()) throw new Error('empty response');
+    const data = JSON.parse(text);
 
+    pollErrors = 0; // reset error count on success
     setProgress(data.progress || 0, data.message || '...');
 
     if (data.status === 'done') {
@@ -714,8 +721,13 @@ async function pollStatus(jobId) {
       showError(data.message);
     }
   } catch(e) {
-    clearInterval(pollInterval);
-    showError('Connection lost: ' + e.message);
+    pollErrors++;
+    console.warn(`Poll error ${pollErrors}/${MAX_POLL_ERRORS}:`, e.message);
+    if (pollErrors >= MAX_POLL_ERRORS) {
+      clearInterval(pollInterval);
+      showError('เชื่อมต่อไม่ได้หลังลอง ' + MAX_POLL_ERRORS + ' ครั้ง: ' + e.message);
+    }
+    // ยังไม่ถึงลิมิต — poll ต่อไปเงียบๆ
   }
 }
 
